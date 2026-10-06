@@ -139,25 +139,33 @@ class FileJob:
         os.replace(tmp, self.state)
 
     def fetch(self, i: int) -> int:
+        """Stream range i into the .part file, resuming at the exact byte after a dropped connection:
+        a reset 100 MB into a 128 MB range costs the 28 MB still missing, not the whole range."""
         a = i * self.chunk
         b = min(self.size, a + self.chunk)
+        pos = [a]
+        fd = os.open(self.part, os.O_WRONLY)
 
         def one():
-            data = http_get(self.url, {"Range": f"bytes={a}-{b - 1}"}, timeout=300)
-            if len(data) != b - a:
-                raise IOError(f"short range {len(data)} != {b - a}")
-            return data
+            req = urllib.request.Request(self.url, headers={"Range": f"bytes={pos[0]}-{b - 1}"})
+            with urllib.request.urlopen(req, timeout=120) as r:
+                if r.status != 206:
+                    raise IOError(f"HTTP {r.status} for a range request")
+                while pos[0] < b:
+                    blk = r.read(min(4 << 20, b - pos[0]))
+                    if not blk:
+                        raise IOError(f"connection closed at {pos[0] - a} of {b - a} bytes")
+                    os.pwrite(fd, blk, pos[0])
+                    pos[0] += len(blk)
 
-        data = retry(one, f"{self.path} [{i + 1}/{self.n}]")
-        fd = os.open(self.part, os.O_WRONLY)
         try:
-            os.pwrite(fd, data, a)
+            retry(one, f"{self.path} [{i + 1}/{self.n}]")
         finally:
             os.close(fd)
         with self.lock:
             self.done.add(i)
             self._save()
-        return len(data)
+        return b - a
 
     def finish(self) -> bool:
         if self.sha:

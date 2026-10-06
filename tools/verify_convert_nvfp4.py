@@ -38,6 +38,10 @@ def main(argv=None) -> int:
 
     md = a.model_dir
     wm = json.load(open(os.path.join(md, "model.safetensors.index.json")))["weight_map"]
+    # sample only what is on disk (a partial conversion can be checked while the rest downloads)
+    have = {f for f in set(wm.values()) if os.path.isfile(os.path.join(md, f))}
+    wm = {k: f for k, f in wm.items() if f in have}
+    print(f"checking {len(have)} of 48 shards")
     man = os.path.join(md, "uncensored_patch_manifest.json")
     patched = json.load(open(man))["items"] if os.path.isfile(man) else {}
     rng = random.Random(a.seed)
@@ -92,7 +96,7 @@ def main(argv=None) -> int:
                   f"({'all -0 -> +0' if only_zero_sign else 'NOT only zero sign'})", flush=True)
 
     dense = [k for k in wm if not EXPERT_RE.match(k) and not re.search(r"\.engram\.", k)]
-    pick = [k for k in patched][:4] + rng.sample(dense, min(a.dense, len(dense)))
+    pick = [k for k in patched if k in wm][:4] + rng.sample(dense, min(a.dense, len(dense)))
     for name in pick:
         lb = local(name)
         sha = hashlib.sha256(lb).hexdigest()

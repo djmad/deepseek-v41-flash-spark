@@ -2122,9 +2122,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="choose what this box should be good at")
     ap.add_argument("--stats", help="coverage.json to read topics from")
     ap.add_argument("--topics", default=os.environ.get("EXPERT_TOPICS", ""))
-    ap.add_argument("--keep", type=float, default=float(os.environ.get("PRUNE_KEEP", "0.39")))
-    ap.add_argument("--max-seq", type=int, default=int(os.environ.get("MAX_SEQ", "32768")))
-    ap.add_argument("--format", default=os.environ.get("EXPERT_FORMAT", "cb3"), choices=("cb3", "fp4"))
+    ap.add_argument("--keep", type=float, default=float(os.environ.get("PRUNE_KEEP") or "0.39"))
+    ap.add_argument("--max-seq", type=int, default=int(os.environ.get("MAX_SEQ") or "32768"))
+    ap.add_argument("--format", default=os.environ.get("EXPERT_FORMAT") or "cb3", choices=("cb3", "fp4"))
     ap.add_argument("--rank", default=B.rank_from_env(), metavar="RULE",
                     help="how several topics are combined into one ranking: "
                          f"{' | '.join(B.RANKS)} (default %(default)s, from DSV41_PRUNE_RANK). "

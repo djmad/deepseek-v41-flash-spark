@@ -276,10 +276,15 @@ def main(argv=None) -> int:
                   open(os.path.join(a.out, "model.safetensors.index.json"), "w"), indent=2)
         cfg = _get(HF.format(repo=a.ref_repo, f="config.json"))
         open(os.path.join(a.out, "config.json"), "wb").write(cfg)
+        out_real = os.path.realpath(a.out)
         for e in os.listdir(a.src):
             if e.endswith(".safetensors") or e in ("model.safetensors.index.json", "config.json") or e.startswith("."):
                 continue
             p, q = os.path.join(a.src, e), os.path.join(a.out, e)
+            # --out may live inside --src (deepseek-v41-uncensored/native): never copy it into itself,
+            # which duplicated all 48 converted shards (476 GB) on the first full run
+            if os.path.realpath(p) == out_real or out_real.startswith(os.path.realpath(p) + os.sep):
+                continue
             if os.path.isdir(p):
                 shutil.copytree(p, q, dirs_exist_ok=True)
             else:

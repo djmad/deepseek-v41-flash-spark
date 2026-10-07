@@ -146,6 +146,14 @@ EK="{"
 [[ -n "${EXPERT_FORMAT:-}" ]] && EK="$EK\"expert_format\": \"$EXPERT_FORMAT\","
 [[ -n "${EXPERT_TOPICS:-}" ]] && EK="$EK\"expert_topics\": \"$EXPERT_TOPICS\","
 [[ -n "${PRUNE_SELECT:-}" ]] && EK="$EK\"prune_select\": \"$PRUNE_SELECT\","
+# The small ring env.example ships (8) is sized for the pruned all-resident mode, where a prefill miss
+# is rare. With the full model every prefill chunk touches nearly all 384 experts of a layer, and a
+# ring smaller than that fails the first request ("transient ring exhausted"). Without PRUNE_KEEP,
+# drop such a ring and let the engine use its own (400).
+if [[ -z "${PRUNE_KEEP:-}" && -n "${TRANSIENT_SLOTS:-}" ]] && (( TRANSIENT_SLOTS < 384 )); then
+    info "TRANSIENT_SLOTS=$TRANSIENT_SLOTS is for pruned mode; full-model streaming uses the engine default (400)"
+    TRANSIENT_SLOTS=""
+fi
 [[ -n "${TRANSIENT_SLOTS:-}" ]] && EK="$EK\"transient_slots\": $TRANSIENT_SLOTS,"
 [[ -n "${KEEP_FREE_GB:-}" ]] && EK="$EK\"keep_free_gb\": $KEEP_FREE_GB,"
 EK="${EK%,}}"

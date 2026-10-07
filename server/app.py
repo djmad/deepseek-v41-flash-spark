@@ -244,6 +244,20 @@ def resolve_thinking(body: dict, default_thinking: bool, default_effort: int) ->
     return thinking, effort
 
 
+def _period(w: list, max_period: int = 64, match: float = 0.95) -> int:
+    """The smallest p <= max_period with w[i] == w[i - p] for at least `match` of the positions, else 0.
+
+    A generation stuck in a loop ("<!DOCTYPE><!DOCTYPE>...", "Let me. Maybe. Wait.") repeats itself
+    with a fixed period; low-diversity text that is still going somewhere (code with literal tables,
+    long runs of numbers) does not."""
+    n = len(w)
+    for p in range(1, min(max_period, n - 1) + 1):
+        same = sum(1 for i in range(p, n) if w[i] == w[i - p])
+        if same >= match * (n - p):
+            return p
+    return 0
+
+
 _IMAGE_BLOCK_TYPES = {"image", "image_url", "input_image"}
 
 
@@ -563,7 +577,10 @@ class State:
                     yield ev
                 if degen_ratio > 0 and len(result.gen_ids) >= degen_window:
                     w = result.gen_ids[-degen_window:]
-                    if len(set(w)) / degen_window < degen_ratio:
+                    # Low diversity alone is not a loop: source code with literal tables (Tetris
+                    # piece matrices: "[0,1,1,0]," row after row) measured 24 distinct in 256 and
+                    # was cut off mid-file. A loop also repeats itself with a fixed period.
+                    if len(set(w)) / degen_window < degen_ratio and _period(w):
                         degenerate = True
                         log.warning("stopping: last %d tokens have %d distinct (%.3f < %.2f); "
                                     "the generation is repeating itself",

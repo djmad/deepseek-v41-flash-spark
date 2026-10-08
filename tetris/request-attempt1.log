@@ -1,0 +1,6 @@
+[20:57:08] 723 chars after 60s
+[20:58:08] 2144 chars after 121s
+[20:59:09] 3533 chars after 181s
+[21:00:09] 5023 chars after 242s
+[21:01:10] 6298 chars after 302s
+{"seconds": 348.3, "chars": 7268, "usage": {"prompt_tokens": 736, "completion_tokens": 2054, "total_tokens": 2790, "completion_tokens_details": {"reasoning_tokens": 0}}, "decode_tok_s": 6.45, "accept_len": 5.31, "html_found": false}

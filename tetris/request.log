@@ -1,0 +1,27 @@
+[21:05:38] 720 chars after 61s
+[21:06:39] 2106 chars after 121s
+[21:07:39] 3506 chars after 181s
+[21:08:39] 4902 chars after 241s
+[21:09:39] 6429 chars after 302s
+[21:10:39] 7552 chars after 362s
+[21:11:40] 9349 chars after 422s
+[21:12:40] 10818 chars after 482s
+[21:13:41] 11975 chars after 543s
+[21:14:42] 13226 chars after 604s
+[21:15:42] 14610 chars after 665s
+[21:16:43] 16222 chars after 726s
+[21:17:43] 17639 chars after 786s
+[21:18:44] 18772 chars after 846s
+[21:19:44] 20006 chars after 907s
+[21:20:45] 21228 chars after 967s
+[21:21:45] 22461 chars after 1027s
+[21:22:45] 24084 chars after 1088s
+[21:23:45] 25365 chars after 1148s
+[21:24:46] 26751 chars after 1208s
+[21:25:47] 28324 chars after 1269s
+[21:26:47] 29710 chars after 1329s
+[21:27:47] 31047 chars after 1390s
+[21:28:48] 32762 chars after 1451s
+[21:29:48] 34697 chars after 1511s
+[21:30:49] 36392 chars after 1571s
+{"seconds": 1575.9, "chars": 36474, "usage": {"prompt_tokens": 736, "completion_tokens": 8849, "total_tokens": 9585, "completion_tokens_details": {"reasoning_tokens": 0}}, "decode_tok_s": 5.71, "accept_len": 5.27, "html_found": true}

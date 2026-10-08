@@ -1,0 +1,250 @@
+<title>DeepSeek V4.1 auf einem Spark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a results band (verdict + chart + table) first, then method, fixes and next steps */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #161b26; --muted: #5a6475; --rule: #dde1e8;
+  --accent: #2b55c7; --accent-soft: #e6ecfb; --good: #1f7a4d; --good-soft: #e3f3ea; --warn: #9a5b00; --warn-soft: #fbf0dc;
+  --bar-a: #2b55c7; --bar-b: #8a9bc4;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11141b; --surface: #181c25; --ink: #e7eaf0; --muted: #9aa4b5; --rule: #2a303d;
+  --accent: #8fb0ff; --accent-soft: #1d2741; --good: #6fd19c; --good-soft: #15291f; --warn: #f0b85c; --warn-soft: #2d2213;
+  --bar-a: #8fb0ff; --bar-b: #59647d; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #11141b; --surface: #181c25; --ink: #e7eaf0; --muted: #9aa4b5; --rule: #2a303d;
+  --accent: #8fb0ff; --accent-soft: #1d2741; --good: #6fd19c; --good-soft: #15291f; --warn: #f0b85c; --warn-soft: #2d2213;
+  --bar-a: #8fb0ff; --bar-b: #59647d; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body); }
+.page { max-width: 880px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 64px; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: 2.1rem; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.35rem; font-weight: 600; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 14px; min-width: 0; }
+header { display: grid; gap: 10px; }
+.meta { color: var(--muted); font-size: 0.9rem; }
+.mono { font-family: var(--mono); font-size: 0.86em; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+.verdict { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 22px 24px; display: grid; gap: 12px; }
+.verdict p { font-size: 1.02rem; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.kpi { border-top: 3px solid var(--accent); padding-top: 10px; display: grid; gap: 2px; }
+.kpi.b { border-top-color: var(--bar-b); }
+.kpi .v { font: 600 1.7rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--muted); font-size: 0.85rem; }
+
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.chart text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.chart .lbl { fill: var(--ink); font-family: var(--body); font-size: 12px; }
+.chart .val { fill: var(--ink); font-weight: 500; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+thead th { font: 500 0.72rem/1.2 var(--mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+tbody tr:last-child td { border-bottom: 0; }
+td.na { color: var(--muted); font-style: italic; }
+.pill { display: inline-block; font: 500 0.72rem/1.4 var(--mono); padding: 1px 8px; border-radius: 999px; }
+.pill.a { background: var(--accent-soft); color: var(--accent); }
+.pill.b { background: var(--bg); color: var(--muted); border: 1px solid var(--rule); }
+.note { color: var(--muted); font-size: 0.88rem; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.status { display: flex; gap: 8px; align-items: baseline; }
+.status .pill.good { background: var(--good-soft); color: var(--good); }
+.status .pill.warn { background: var(--warn-soft); color: var(--warn); }
+
+ul.list { margin: 0; padding-left: 1.1rem; display: grid; gap: 8px; max-width: 72ch; }
+ul.list li::marker { color: var(--accent); }
+ol.steps { margin: 0; padding-left: 1.3rem; display: grid; gap: 6px; max-width: 72ch; }
+.fix { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.fix:last-child { border-bottom: 0; }
+.fix .what { font-weight: 600; }
+.fix .how { color: var(--muted); font-size: 0.92rem; }
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (max-width: 480px) { h1 { font-size: 1.7rem; } .verdict { padding: 18px; } }
+</style>
+
+<div class="page">
+  <header>
+    <span class="eyebrow">Executive Report · 7. Oktober 2026 · djmads-spark (DGX Spark, GB10)</span>
+    <h1>DeepSeek V4.1 Flash Uncensored auf einem einzigen Spark</h1>
+    <p class="meta">Modell <span class="mono">MomonV/DeepSeek-V4.1-Flash-UNCENSORED-NVFP4</span> (527 GB) · Engine: Fork <span class="mono">djmad/deepseek-v41-flash-spark</span> (0xBakeer, v0.5.0 + 6 Commits) · Experten-Streaming von NVMe</p>
+  </header>
+
+  <section class="verdict" aria-labelledby="v-h">
+    <span class="eyebrow">Ergebnis</span>
+    <h2 id="v-h">Es läuft: ein 552-Milliarden-Parameter-Modell auf einer Box mit 128 GB, bei 3–4 Tokens pro Sekunde in voller Qualität</h2>
+    <p>Das Modell ist rund viermal so groß wie der Speicher des Spark. Die Engine hält die meistgenutzten 26 % der Experten im Speicher und liest den Rest bei Bedarf von der NVMe. Antworten sind korrekt, auf Deutsch und Englisch. Ein gepruned Modus ist bis zu doppelt so schnell, verliert aber Qualität außerhalb von Englisch und steht an der Speichergrenze.</p>
+    <div class="kpis">
+      <div class="kpi"><span class="v">3,2–4,0 tok/s</span><span class="l">Modus A, volles Modell (Streaming)</span></div>
+      <div class="kpi b"><span class="v">4,9–7,9 tok/s</span><span class="l">Modus B, 30 % der Experten (gepruned)</span></div>
+      <div class="kpi"><span class="v">≈2,5 min</span><span class="l">Kaltstart bis bereit (Modus A)</span></div>
+      <div class="kpi"><span class="v">≈1 GB</span><span class="l">NVMe-Lesevolumen pro Token (Modus A)</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="m-h">
+    <span class="eyebrow">Messwerte</span>
+    <h2 id="m-h">Ausgabegeschwindigkeit (Decode, Median)</h2>
+    <div class="chart" role="img" aria-label="Balkendiagramm: Modus A prose 3,20, code 4,04, random 2k 3,14 tok/s; Modus B prose 4,95, code 7,95 tok/s, random 2k nicht gemessen">
+      <svg viewBox="0 0 640 230" xmlns="http://www.w3.org/2000/svg">
+        <!-- scale: 0..10 tok/s over x 150..610 (46 px per tok/s) -->
+        <g stroke="var(--rule)" stroke-width="1">
+          <line x1="150" y1="14" x2="150" y2="196"/><line x1="242" y1="14" x2="242" y2="196"/><line x1="334" y1="14" x2="334" y2="196"/>
+          <line x1="426" y1="14" x2="426" y2="196"/><line x1="518" y1="14" x2="518" y2="196"/><line x1="610" y1="14" x2="610" y2="196"/>
+        </g>
+        <g text-anchor="middle">
+          <text x="150" y="214">0</text><text x="242" y="214">2</text><text x="334" y="214">4</text><text x="426" y="214">6</text><text x="518" y="214">8</text><text x="610" y="214">10 tok/s</text>
+        </g>
+        <!-- prose -->
+        <text class="lbl" x="140" y="38" text-anchor="end">prose</text>
+        <rect x="150" y="22" width="147.2" height="16" rx="2" fill="var(--bar-a)"/><text class="val" x="303" y="34">3,20</text>
+        <rect x="150" y="40" width="227.7" height="16" rx="2" fill="var(--bar-b)"/><text class="val" x="384" y="52">4,95</text>
+        <!-- code -->
+        <text class="lbl" x="140" y="96" text-anchor="end">code</text>
+        <rect x="150" y="80" width="185.8" height="16" rx="2" fill="var(--bar-a)"/><text class="val" x="342" y="92">4,04</text>
+        <rect x="150" y="98" width="365.7" height="16" rx="2" fill="var(--bar-b)"/><text class="val" x="522" y="110">7,95</text>
+        <!-- random 2k -->
+        <text class="lbl" x="140" y="154" text-anchor="end">2k-Prompt</text>
+        <rect x="150" y="138" width="144.6" height="16" rx="2" fill="var(--bar-a)"/><text class="val" x="301" y="150">3,14</text>
+        <text x="156" y="168">Modus B: nicht gemessen (Speichergrenze)</text>
+      </svg>
+      <div class="legend"><span><span class="sw" style="background:var(--bar-a)"></span>Modus A · volles Modell, Streaming</span><span><span class="sw" style="background:var(--bar-b)"></span>Modus B · gepruned, 30 % resident</span></div>
+    </div>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Modus</th><th>Workload</th><th>Decode tok/s</th><th>Zeit bis 1. Token</th><th>Experten-Treffer</th><th>Annahme Spekulation</th><th>NVMe / Token</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill a">A</span></td><td>prose · 512 Tok.</td><td>3,20</td><td>9,6 s</td><td>87,8 %</td><td>2,0</td><td>1,05 GB</td></tr>
+          <tr><td><span class="pill a">A</span></td><td>code · 512 Tok.</td><td>4,04</td><td>9,5 s</td><td>79,9 %</td><td>3,7</td><td>1,01 GB</td></tr>
+          <tr><td><span class="pill a">A</span></td><td>random · 2.040-Tok.-Prompt</td><td>3,14</td><td>37,4 s</td><td>78,6 %</td><td>3,1</td><td>inkl. Prompt</td></tr>
+          <tr><td><span class="pill b">B</span></td><td>prose · 512 Tok.</td><td>4,95</td><td>2,9 s</td><td>100 %</td><td>1,9</td><td>0</td></tr>
+          <tr><td><span class="pill b">B</span></td><td>code · 512 Tok.</td><td>7,95</td><td>2,5 s</td><td>100 %</td><td>3,1</td><td>0</td></tr>
+          <tr><td><span class="pill b">B</span></td><td>random · 2k-Prompt</td><td class="na" colspan="5">abgebrochen: nur noch 3 GB RAM frei, Lauf gestoppt bevor die Box einfriert</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Gemessen mit <span class="mono">bench/bench.py</span> des Projekts: 1 Aufwärmlauf und 2 Messläufe, Temperatur 0,6, Thinking aus, Kontext 32k. Modus A: 75 GB Arena, 3.982 Experten-Slots (26 %). Modus B: Profil „Chat and explanation", 4.640 Experten (30 %) FP4, nach Beitrag (saliency/maxmin) gewählt. Annahme Spekulation = Tokens pro Verifikationsschritt des DSpark-Drafters.</p>
+  </section>
+
+  <section aria-labelledby="c-h">
+    <span class="eyebrow">Einordnung</span>
+    <h2 id="c-h">Was die Zahlen bedeuten</h2>
+    <div class="cols">
+      <div class="card">
+        <div class="status"><span class="pill good">im Soll</span><h3>Modus A trifft die Projektwerte</h3></div>
+        <p>Das Projekt dokumentiert 2,7–4 tok/s und ≈0,9 GB NVMe pro Token für das volle Modell. Gemessen: 3,1–4,0 tok/s und ≈1 GB pro Token. Die Grenze ist das NVMe-Lesen der fehlenden Experten, nicht die GPU.</p>
+      </div>
+      <div class="card">
+        <div class="status"><span class="pill warn">unter Soll</span><h3>Modus B bleibt hinter dem Projekt zurück</h3></div>
+        <p>Das Projekt nennt für ein ähnliches Pruning (31 %, FP4) ≈13 tok/s, für Code bis 30 tok/s. Gemessen: 4,9–7,9 tok/s, ohne einen einzigen NVMe-Zugriff. Diese Messung lief unter <span class="mono">COOLDOWN</span> (GPU 1,69 GHz). Modus B ist RAM-bandbreitengebunden, der Takt kann hier also eine Rolle spielen. Eine Gegenmessung ohne Drosselung steht für Modus B noch aus.</p>
+      </div>
+      <div class="card">
+        <div class="status"><span class="pill good">korrekt</span><h3>Qualität Modus A</h3></div>
+        <p>„17×23?" → <span class="mono">391</span>. „Hauptstadt von Österreich und ein Fluss?" → „Die Hauptstadt von Österreich ist Wien, und ein bekannter Fluss dort ist die Donau."</p>
+      </div>
+      <div class="card">
+        <div class="status"><span class="pill warn">eingeschränkt</span><h3>Qualität Modus B</h3></div>
+        <p>Dieselbe Frage auf Deutsch: „Wien ist die capital of Austria, and the Danube is a well-known river there." Das Profil enthält nur englische Themen, deshalb fehlen die Experten für Deutsch. Das Projekt führt das als offenen Punkt.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="n-h">
+    <span class="eyebrow">Nachtrag · Abend des 7. Oktober</span>
+    <h2 id="n-h">Ohne Drosselung, Dauerlast und ein echter Coding-Auftrag</h2>
+    <p>Gegen 21 Uhr hob der Energie-Controller die Begrenzung auf: Die GPU-Anforderung stand auf 3.000 MHz, gemessen wurden unter Last <strong>≈2,45 GHz</strong>. Werte aus der Telemetrie (<span class="mono">energy.clocks.gpu</span>), Modus A.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Lauf</th><th>GPU</th><th>Decode tok/s</th><th>Annahme Spekulation</th><th>Zeit pro Schritt</th><th>Umfang</th></tr></thead>
+        <tbody>
+          <tr><td>code-Benchmark</td><td>1,69 GHz</td><td>4,04</td><td>3,7</td><td>926 ms</td><td>512 Tokens</td></tr>
+          <tr><td>Tetris als Single-File-HTML</td><td>≈2,45 GHz</td><td><strong>5,71</strong></td><td><strong>5,3</strong></td><td>923 ms</td><td>8.849 Tokens in 26 min</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <div class="status"><span class="pill good">geklärt</span><h3>Der GPU-Takt ist im Streaming-Modus egal</h3></div>
+        <p>Die Zeit pro Verifikationsschritt ist bei beiden Taktraten gleich (926 gegen 923 ms). Das Plus von 4,0 auf 5,7 tok/s kommt vom Drafter: Bei langem, regelmäßigem Code nimmt er 5,3 statt 3,7 Tokens pro Schritt an. Die Grenze ist das Nachladen von der SSD.</p>
+      </div>
+      <div class="card">
+        <div class="status"><span class="pill good">stabil</span><h3>Burn-in: 5 Coding-Agenten, 20 Minuten</h3></div>
+        <p>29 von 29 Anfragen erfolgreich, alle mit gültigem Python-Code, keine Abbrüche. Gesamtdurchsatz 3,39 tok/s bei 3,95 tok/s Engine-Decode. Die Engine rechnet eine Anfrage nach der anderen, deshalb wartet jeder Agent im Mittel 194 s, eine Antwort dauert insgesamt ≈4 min. Mindestens 18 GiB RAM frei, GPU max. 45 °C. Lief noch bei 1,69 GHz.</p>
+      </div>
+      <div class="card">
+        <div class="status"><span class="pill warn">Engpass</span><h3>Wo die Zeit hingeht</h3></div>
+        <p>Von 1.158 s Decode im Burn-in standen 1.141 s Experten-Ladevorgänge aus. Die GPU-Auslastung lag im Median bei 30 %. Die NVMe (Phison E27T, PCIe 4.0) schafft laut fio 6,6 GB/s, die Engine erreicht 4,1 GB/s, weil sie Layer für Layer nachlädt. Der RAM mit ≈273 GB/s begrenzt nur Modus B.</p>
+      </div>
+      <div class="card">
+        <div class="status"><span class="pill warn">mit Fehlern</span><h3>Tetris: läuft, ist aber nicht spielbar</h3></div>
+        <p>Vollständige Datei, 1.093 Zeilen, keine JavaScript-Fehler. Startbildschirm, Vorschau, Halten, Drehen, Pause, Game Over und Highscore funktionieren. Steine bleiben aber über dem Stapel in der Luft hängen, deshalb wurde nie eine Reihe voll. Neue Steine sind die ersten ein bis zwei Sekunden unsichtbar.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="w-h">
+    <span class="eyebrow">Ablauf</span>
+    <h2 id="w-h">Was gemacht wurde</h2>
+    <ol class="steps">
+      <li>Fork <span class="mono">djmad/deepseek-v41-flash-spark</span> nach <span class="mono">AI_MODELS/deepseek-v41-flash-spark</span> geklont, Modellordner <span class="mono">deepseek-v41-uncensored/</span>.</li>
+      <li>527 GB heruntergeladen: 13,7 h bei ≈10 MB/s (WLAN-Grenze), alle 86 Dateien per SHA-256 geprüft.</li>
+      <li>NVFP4 in das native FP4-Format der Engine zurückkonvertiert (19 min). NVIDIAs NVFP4 ist hier verlustfrei: Alle 46.080 Skalen sind exakt Zweierpotenzen, die Werte sind identisch mit DeepSeeks Original.</li>
+      <li>Gegen <span class="mono">deepseek-ai/DeepSeek-V4.1-Flash</span> geprüft: 164 von 164 Stichproben bestanden. Die 54 „uncensored"-Tensoren (FP8, Layer 10–36) stimmen mit dem Manifest überein.</li>
+      <li>vLLM über das Dashboard gestoppt (vorher geprüft: keine Analysen, 0 Requests), DeepSeek gestartet und gemessen, danach vLLM wieder gestartet.</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="f-h">
+    <span class="eyebrow">Fixes im Fork (lokal committet, nicht gepusht)</span>
+    <h2 id="f-h">Was nicht funktionierte, und wie es behoben ist</h2>
+    <div class="card">
+      <div class="fix"><span class="what">Engine liest kein NVFP4</span><span class="how">Neu: <span class="mono">tools/convert_nvfp4.py</span> mit Unit-Test und Verifier. Die konvertierten Dateien übernehmen DeepSeeks Header Byte für Byte, Shards ohne Experten werden hardgelinkt statt kopiert.</span></div>
+      <div class="fix"><span class="what">Download blieb hängen</span><span class="how">Tailscales DNS antwortet SERVFAIL für Hugging Faces CDN, der xet-Client gab auf. Neu: <span class="mono">scripts/hf_fetch.py</span>. Er fragt ersatzweise die LAN-Resolver, setzt abgebrochene Verbindungen byte-genau fort und prüft per SHA-256.</span></div>
+      <div class="fix"><span class="what">Erster Request im Streaming-Modus: „transient ring exhausted"</span><span class="how"><span class="mono">env.example</span> setzt 8 Slots für den gepruned Modus. <span class="mono">start.sh</span> ignoriert das jetzt ohne Pruning und nimmt den Engine-Default (400).</span></div>
+      <div class="fix"><span class="what"><span class="mono">tune.sh</span> stürzte im Streaming-Modus ab</span><span class="how">Ein leeres <span class="mono">PRUNE_KEEP</span> wird jetzt als Default gelesen statt mit <span class="mono">float('')</span> zu scheitern.</span></div>
+      <div class="fix"><span class="what">Server brach gesunden Code als „Wiederholung" ab</span><span class="how">Der erste Tetris-Versuch wurde nach 2.054 Tokens gestoppt, weil die Tetromino-Matrizen nur 24 verschiedene Tokens in 256 hatten. Der Server stoppt jetzt nur, wenn sich das Fenster tatsächlich periodisch wiederholt. Echte Schleifen werden weiter erkannt, alle 16 Server-Tests bestehen.</span></div>
+      <div class="fix"><span class="what">Konverter kopierte sich selbst (476 GB doppelt)</span><span class="how">Ausgabeordner im Quellordner wird beim Kopieren übersprungen. Das Duplikat ist gelöscht.</span></div>
+      <div class="fix"><span class="what">Box-spezifisch, nur in <span class="mono">.env</span></span><span class="how"><span class="mono">~/.triton/cache</span> gehört root, deshalb Cache im Projekt. <span class="mono">python3.12-dev</span> fehlt, die passenden Header liegen ohne root in <span class="mono">.pydev/</span>.</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="r-h">
+    <span class="eyebrow">Empfehlung</span>
+    <h2 id="r-h">Nächste Schritte</h2>
+    <ul class="list">
+      <li><strong>Für Qualität und Deutsch: Modus A.</strong> Er ist langsam, aber vollständig. Eignet sich für Aufgaben, bei denen 3–4 tok/s reichen, etwa Batch-Läufe, Analysen oder lange Antworten im Hintergrund.</li>
+      <li><strong>Für Modus A zählen nur SSD-Bytes.</strong> Mehr Takt bringt nachweislich nichts. Die Hebel: ein Coding-Hot-Set beim Start (Einstellung, geschätzt +5–8 % bei Code) und CB3 vorab berechnet (31–36 % der Experten resident, geschätzt +15–40 %, Qualität ≈1–3 % schlechter, freies Generieren ungetestet).</li>
+      <li><strong>Modus B ohne Drosselung messen.</strong> Dort ist der RAM die Grenze, der Takt könnte also helfen.</li>
+      <li><strong>Modus B nur mit Reserve.</strong> 30 % FP4 lassen ≈10 GB frei, zu wenig für lange Prompts. Für den Alltag ein kleinerer Keep-Anteil oder ein kürzeres <span class="mono">MAX_SEQ</span>, sowie ein Profil mit Deutsch („European languages").</li>
+      <li><strong>Fixes upstream anbieten.</strong> Ring-Fix, <span class="mono">tune.sh</span>-Fix und der NVFP4-Konverter sind allgemein nützlich, ein Pull Request an 0xBakeer wäre naheliegend.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="s-h">
+    <span class="eyebrow">Stand</span>
+    <h2 id="s-h">Zustand der Box nach dem Test</h2>
+    <div class="cols">
+      <div class="card"><div class="status"><span class="pill warn">umgestellt</span><h3>DeepSeek läuft, vLLM gestoppt</h3></div><p>Für die Tests am Abend läuft DeepSeek auf Port 8001 (FP4-Streaming). vLLM (<span class="mono">local-gemma4-26b-uncensored-nvfp4-mtp</span>) ist über das Dashboard gestoppt und wird von dort wieder gestartet.</p></div>
+      <div class="card"><div class="status"><span class="pill good">aufgeräumt</span><h3>Platte: 65 % belegt, 1,3 TB frei</h3></div><p>Vorher 86 %. Gelöscht wurden die 40 NVFP4-Download-Shards (313 GB, ersetzt durch <span class="mono">native/</span>) und das 476-GB-Duplikat. Das Modell belegt jetzt 476 GB.</p></div>
+    </div>
+  </section>
+
+  <footer>Rohdaten: <span class="mono">results/momonv/*.json</span> und <span class="mono">logs/bench-*.log</span> im Projektordner. Start: <span class="mono">./start.sh</span> (Port 8001, vLLM vorher über das Dashboard stoppen).</footer>
+</div>
